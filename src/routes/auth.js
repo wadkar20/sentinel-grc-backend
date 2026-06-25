@@ -2,6 +2,7 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const pool = require("../config/db");
+const { REAL_CONTROLS } = require("../config/realControls");
 
 const router = express.Router();
 
@@ -15,14 +16,18 @@ const DEFAULT_FRAMEWORKS = [
   { key: "CERT", name: "CERT-In Guidelines", controls: 28, region: "India", active: false },
 ];
 
-const DEFAULT_CONTROLS = [
-  ["CM-01", "Access Control & MFA", "Security Team", ["SOC2", "ISO", "RBI"], true, "2026-07-01", "Compliant"],
-  ["CM-02", "Data Encryption (Rest/Transit)", "Infra Team", ["SOC2", "ISO", "DPDP"], true, "2026-07-10", "Compliant"],
-  ["CM-03", "Incident Response Plan", "CISO", ["SOC2", "ISO"], false, "2026-06-30", "In Review"],
-  ["CM-04", "Data Backup & Recovery", "Infra Team", ["SOC2", "ISO"], true, "2026-07-15", "Compliant"],
-  ["CM-05", "Vendor Risk Assessment", "Procurement", ["SOC2", "ISO"], false, "2026-06-25", "Non-Compliant"],
-  ["CM-06", "Security Awareness Training", "HR", ["SOC2", "ISO"], true, "2026-08-01", "Compliant"],
-];
+function statusForIndex(i) {
+  const r = i % 10;
+  if (r < 6) return "Compliant";
+  if (r < 9) return "In Review";
+  return "Non-Compliant";
+}
+
+function dueDateForIndex(i) {
+  const base = new Date("2026-07-01");
+  base.setDate(base.getDate() + (i % 30));
+  return base.toISOString().slice(0, 10);
+}
 
 const DEFAULT_RISKS = [
   ["RISK-01", "Unencrypted backup snapshots", "Critical", "Medium", "High", "Open"],
@@ -66,10 +71,20 @@ router.post("/signup", async (req, res) => {
       );
     }
 
-    for (const c of DEFAULT_CONTROLS) {
+    for (let i = 0; i < REAL_CONTROLS.length; i++) {
+      const c = REAL_CONTROLS[i];
       await client.query(
         "INSERT INTO controls (company_id, control_code, name, owner, frameworks, evidence, due_date, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-        [companyId, c[0], c[1], c[2], c[3], c[4], c[5], c[6]]
+        [
+          companyId,
+          c.code,
+          c.name,
+          c.owner,
+          c.frameworks,
+          i % 3 === 0,
+          dueDateForIndex(i),
+          statusForIndex(i),
+        ]
       );
     }
 
